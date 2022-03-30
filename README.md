@@ -85,13 +85,35 @@ Flow 1 From (Station) with IP : 10.1.1.1 To (AP) with address : 10.1.1.3
   Tx Packets: 5494
   Tx Bytes:   5779688
   TxOffered:  4.62375 Mbps
-  Rx Packets: 5491
+  Rx Packets: 5491  
   Rx Bytes:   5776532
 Offered = 5e+06
 Throughput = 9.24413
 
 ```
 
+***
+## Building a 802.11 Wireless Local Area Network in NS-3 
+### NS-3 Network Terminologies
+- ##### Node
+- ##### Application
+- ##### Channel
+- ##### Network Device
+- ##### Topology Helpers
+
+### Implementing the Wireless Network 
+##### 1 .  Input parameters
+##### 2 .  Create AP and Station Nodes
+##### 3 .  Configure 802.11 Physical Layer
+##### 4 .  Configure 802.11 MAC Layer
+##### 5 .  Installing the PHY and MAC layer to the Network Device
+##### 6 .  Configuring the mobility model of the devices
+##### 7 .  Configure the Internet Layer
+##### 8 .  Configure the Transport and Application
+##### 9 .  Enable Packet Capture
+##### 10 .  Collecting Network Traffic Stats
+
+WIP!
 
 
 
