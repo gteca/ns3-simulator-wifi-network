@@ -50,5 +50,52 @@ foo@bar:~$ ./waf configure --build-profile=debug --enable-examples --enable-test
 foo@bar:~$ ./waf
 ```
 ***
-### Clone and run the wifi-network from this repository
+## Clone and run the wifi-network from this repository
+Once you have installed and build ns-3 simulator repository, in order to run thw wifi-network of this repository:
+- ##### Clone this repository via HTTPS
+```console
+foo@bar:~$ mkdir ns-3-wifi-network
+foo@bar:~$ cd ns-3-wifi-network
+foo@bar:~$ git clone https://github.com/gteca/ns3-simulator-wifi-network.git
+foo@bar:~$ cd ns3-simulator-wifi-network
+```
+- ##### Create a symbolic link inside the installed ns-3 simulator 
+You will work inside the directory where the ns3-simulator-wifi-network git repository is placed, in order to build and run the wifi-network you should tell ns-3 simulator where is the file to be compiled and built, for this purpose create a symbolic link to the target file inside the network simulator.
+
+```console
+foo@bar:~$ cd /home/your_user_name/ns-3-simulator/ns-allinone-3.35/ns-3.35/scratch
+foo@bar:~$ ln -s /home/your_user_name/ns-3-wifi-network/ns3-simulator-wifi-network/wifi-network.cc wifi-infrastructure.cc
+```
+- ##### Build and run the wifi network
+```console
+foo@bar:~$ cd ..
+foo@bar:~$ ./waf --run scratch/wifi-infrastructure.cc
+foo@bar:~$ ln -s /home/your_user_name/ns-3-wifi-network/ns3-simulator-wifi-network/wifi-network.cc wifi-network.cc
+```
+You shall see the output as follows:
+```console
+Flow 1 From (Station) with IP : 10.1.1.1 To (AP) with address : 10.1.1.3
+  Tx Packets: 5494
+  Tx Bytes:   5779688
+  TxOffered:  4.62375 Mbps
+  Rx Packets: 5493
+  Rx Bytes:   5778636
+
+ Flow 2 From (Station) with IP : 10.1.1.2 To (AP) with address : 10.1.1.3
+  Tx Packets: 5494
+  Tx Bytes:   5779688
+  TxOffered:  4.62375 Mbps
+  Rx Packets: 5491
+  Rx Bytes:   5776532
+Offered = 5e+06
+Throughput = 9.24413
+
+```
+
+
+
+
+
+
+
 
