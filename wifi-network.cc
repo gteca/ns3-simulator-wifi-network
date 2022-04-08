@@ -30,13 +30,13 @@ void PopulateARPcache ();
 
 int main (int argc, char *argv[])
 {
-  bool verbose = true;
-  uint32_t nStations = 1;
-  bool tracing = true;
-  double      simulationTime      = 5; // [seconds]
-  uint32_t    packetSize          = 1024;
-  double timeInterval = 1.0;
-  uint32_t nPackets = 3;
+  bool     verbose           = false;
+  uint32_t nStations         = 5;
+  bool     tracing           = true;
+  double   simulationTime    = 5; // [seconds]
+  uint32_t packetSize        = 2000;
+  double   timeInterval      = 0.5;
+  uint32_t nPackets          = 5;
 
   CommandLine cmd (__FILE__);
   cmd.AddValue ("nStations", "Number of wifi STA devices", nStations);
@@ -47,8 +47,8 @@ int main (int argc, char *argv[])
 
   if (verbose)
     {
-      LogComponentEnable ("UdpEchoClientApplication", LOG_LEVEL_INFO);
-      LogComponentEnable ("UdpEchoServerApplication", LOG_LEVEL_INFO);
+      LogComponentEnable ("UdpClient", LOG_LEVEL_INFO);
+      LogComponentEnable ("UdpServer", LOG_LEVEL_INFO);
     }
 
   NodeContainer wifiStaNodes;
@@ -105,14 +105,18 @@ int main (int argc, char *argv[])
   serverApp.Start (Seconds (1.0));
   serverApp.Stop (Seconds (simulationTime + 1));
 
-  UdpClientHelper udpClient (apInterfaces.GetAddress(0), serverPort);
-  udpClient.SetAttribute ("MaxPackets", UintegerValue (nPackets));
-  udpClient.SetAttribute ("Interval", TimeValue (Seconds (timeInterval)));
-  udpClient.SetAttribute ("PacketSize", UintegerValue (packetSize));
-  ApplicationContainer clientApps = udpClient.Install (wifiStaNodes.Get(0));
-  clientApps.Start (Seconds (2.0));
-  clientApps.Stop (Seconds (simulationTime + 1));
 
+  for(uint32_t i = 0 ; i < nStations; i++)
+  {
+    UdpClientHelper udpClient (apInterfaces.GetAddress(0), serverPort);
+    udpClient.SetAttribute ("MaxPackets", UintegerValue (nPackets));
+    udpClient.SetAttribute ("Interval", TimeValue (Seconds (timeInterval)));
+    udpClient.SetAttribute ("PacketSize", UintegerValue (packetSize));
+    ApplicationContainer clientApps = udpClient.Install (wifiStaNodes.Get(i));
+    clientApps.Start (Seconds (2.0));
+    clientApps.Stop (Seconds (simulationTime + 1));  
+  }
+  
   Ipv4GlobalRoutingHelper::PopulateRoutingTables ();
   PopulateARPcache();
 
@@ -121,7 +125,8 @@ int main (int argc, char *argv[])
   if (tracing)
     {
       phy.SetPcapDataLinkType (WifiPhyHelper::DLT_IEEE802_11_RADIO);
-      phy.EnablePcap ("wifi-sta", staDevices.Get (0));
+      //phy.EnablePcap ("wifi-sta", staDevices.Get (0));
+      phy.EnablePcap ("wifi-ap", apDevices.Get (0));
     }
 
   Simulator::Run ();
