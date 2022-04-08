@@ -1,186 +1,181 @@
+/* -*- Mode:C++; c-file-style:"gnu"; indent-tabs-mode:nil; -*- */
+/*
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation;
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ */
+
 #include "ns3/core-module.h"
 #include "ns3/network-module.h"
 #include "ns3/applications-module.h"
-#include "ns3/wifi-module.h"
 #include "ns3/mobility-module.h"
 #include "ns3/internet-module.h"
-#include "ns3/ipv4-global-routing-helper.h"
-#include "ns3/flow-monitor-module.h"
+#include "ns3/yans-wifi-helper.h"
+#include "ns3/ssid.h"
 
-#include <iostream>
-#include <fstream>
-#include <vector>
-#include <string>
+using namespace ns3;
 
-/* Default Network Topology IBSS (Independent Basic Service Set)
-   Wifi 10.1.1.0
-                      AP
-  *    *    *   ...   *
-  |    |    |   ...   |
- n0   n1   n2   ...  n4 (AP will be always the last node in right side,but node 0 in inner topology created by wifiApNode)
-  C                  S
-  C = CLIENT         S = Server
-  X = Number of nodes
-*/
-using namespace ns3;                            
-using namespace std;
+NS_LOG_COMPONENT_DEFINE ("wifi-network");
 
-NS_LOG_COMPONENT_DEFINE ("WifiNetwork"); 
+void PopulateARPcache ();
 
 int main (int argc, char *argv[])
 {
-    bool       verbose             = true;
-    bool       tracing             = false;
-    double     simulationTime      = 10; 
-    uint32_t   payloadSize         = 1024;
-    uint64_t   numberOfPackets     = 10000;
-    double     offeredLoad         = 0;
-    double     intervalSize        = 0;
-    int        nStations           = 2;
-    bool       showDetails         = true;
+  bool verbose = true;
+  uint32_t nStations = 1;
+  bool tracing = true;
+  double      simulationTime      = 5; // [seconds]
+  uint32_t    packetSize          = 1024;
+  double timeInterval = 1.0;
+  uint32_t nPackets = 3;
 
-    CommandLine cmd;
-    cmd.AddValue ("nStations", "Number of wifi STATION devices", nStations);
-    cmd.AddValue ("verbose", "Tell echo applications to log messages about their activities if true", verbose);
-    cmd.AddValue ("tracing", "Enable pcap tracing", tracing);
-    cmd.AddValue ("simulationTime", "Time of simulation", simulationTime);
-    cmd.AddValue ("payLoadSize", "The size of Packet to be send by client", payloadSize);
-    cmd.Parse (argc,argv);
+  CommandLine cmd (__FILE__);
+  cmd.AddValue ("nStations", "Number of wifi STA devices", nStations);
+  cmd.AddValue ("verbose", "Tell echo applications to log if true", verbose);
+  cmd.AddValue ("tracing", "Enable pcap tracing", tracing);
 
-    if (nStations == 0 || nStations > 254)
+  cmd.Parse (argc,argv);
+
+  if (verbose)
     {
-      cout << "Something is wrong, check nStations parameter " <<endl;
-      return 1;
+      LogComponentEnable ("UdpEchoClientApplication", LOG_LEVEL_INFO);
+      LogComponentEnable ("UdpEchoServerApplication", LOG_LEVEL_INFO);
     }
 
-    offeredLoad  = 10*1000*1000/nStations;
-    intervalSize = (payloadSize*8)/(offeredLoad);
+  NodeContainer wifiStaNodes;
+  wifiStaNodes.Create (nStations);
+  NodeContainer wifiApNode;
+  wifiApNode.Create(1);
 
-    if (verbose)
-    {
-     LogComponentEnableAll(LOG_PREFIX_NODE);
-     LogComponentEnable ("UdpEchoClientApplication", LOG_LEVEL_INFO);
-     LogComponentEnable ("UdpEchoServerApplication", LOG_LEVEL_INFO);
-    }
+  YansWifiChannelHelper channel = YansWifiChannelHelper::Default ();
+  YansWifiPhyHelper phy;
+  phy.SetChannel (channel.Create ());
 
-    NodeContainer wifiStaNodes;
-    wifiStaNodes.Create (nStations);
-    NodeContainer wifiApNode ;
-    wifiApNode.Create(1);
-
-    YansWifiChannelHelper channel = YansWifiChannelHelper::Default ();
-    YansWifiPhyHelper phy;
-    phy.SetChannel (channel.Create ());
-
-    WifiHelper wifi;
-    wifi.SetStandard (WIFI_STANDARD_80211ac);
-    wifi.SetRemoteStationManager ("ns3::ConstantRateWifiManager","DataMode", StringValue ("VhtMcs9"),
+  WifiHelper wifi;
+  wifi.SetStandard (WIFI_STANDARD_80211ac);
+  wifi.SetRemoteStationManager ("ns3::ConstantRateWifiManager","DataMode", StringValue ("VhtMcs9"),
                                    "ControlMode", StringValue ("VhtMcs0")
                                   );
-    Config::Set ("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Phy/ChannelWidth", UintegerValue (80));
-      
-    WifiMacHelper mac;
-    Ssid ssid = Ssid ("covert-wifi");
-    mac.SetType ("ns3::StaWifiMac",
-                 "Ssid", SsidValue (ssid),
-                 "ActiveProbing", BooleanValue (false)
-                 );
+  Config::Set ("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Phy/ChannelWidth", UintegerValue (20));
+  Config::Set("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/HtConfiguration/ShortGuardIntervalSupported", BooleanValue (false));
 
-    NetDeviceContainer staDevices;
-    staDevices = wifi.Install (phy, mac, wifiStaNodes);
+  WifiMacHelper mac;
+  Ssid ssid = Ssid ("Krakow-Wifi");
+  mac.SetType ("ns3::StaWifiMac",
+               "Ssid", SsidValue (ssid),
+               "ActiveProbing", BooleanValue (false));
 
-    mac.SetType ("ns3::ApWifiMac",
-                "Ssid", SsidValue (ssid),
-                "BeaconGeneration", BooleanValue (true),
-                "BeaconInterval", TimeValue (Seconds (0.1024))
-                );
+  NetDeviceContainer staDevices;
+  staDevices = wifi.Install (phy, mac, wifiStaNodes);
 
-    NetDeviceContainer apDevices;
-    apDevices = wifi.Install (phy, mac, wifiApNode);
-    Config::Set("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/HtConfiguration/ShortGuardIntervalSupported", BooleanValue (true));
-  
-    
-    MobilityHelper mobility;
-    Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator> ();
-    positionAlloc->Add (Vector (0.0, 0.0, 0.0));
-    positionAlloc->Add (Vector (1, 0.0, 0.0));
-    mobility.SetPositionAllocator (positionAlloc);
-    mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
-    mobility.Install (wifiStaNodes);
-    mobility.Install (wifiApNode);
+  mac.SetType ("ns3::ApWifiMac",
+               "Ssid", SsidValue (ssid));
 
-    InternetStackHelper stack;
-    stack.Install (wifiApNode);
-    stack.Install (wifiStaNodes);
+  NetDeviceContainer apDevices;
+  apDevices = wifi.Install (phy, mac, wifiApNode);
 
-    Ipv4AddressHelper address;
-    address.SetBase ("10.1.1.0", "255.255.255.0");
-    address.Assign (staDevices);
-    Ipv4InterfaceContainer apInterfaces;
-    apInterfaces =  address.Assign (apDevices);
+  MobilityHelper mobility;
+  mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
+  mobility.Install (wifiStaNodes);
+  mobility.Install (wifiApNode);
 
-    
-     uint16_t port = 9;
-     UdpServerHelper Server (port);
-     ApplicationContainer serverApp = Server.Install (wifiApNode.Get (0));
-     serverApp.Start (Seconds (1.0));
-     serverApp.Stop (Seconds (simulationTime + 1.0));
-    
-     UdpClientHelper Client (apInterfaces.GetAddress (0), 9);
-     Client.SetAttribute ("MaxPackets", UintegerValue (numberOfPackets));
-     Client.SetAttribute ("Interval", TimeValue (Seconds (intervalSize)));
-     Client.SetAttribute ("PacketSize", UintegerValue (payloadSize ));
 
-      for(int iterator = 0 ; iterator < nStations; ++iterator)
-      {
-       ApplicationContainer clientApp [nStations];
-       clientApp[iterator]= Client.Install (wifiStaNodes.Get (nStations - (iterator+1)));
-       clientApp[iterator].Start (Seconds (2.0));
-       clientApp[iterator].Stop  (Seconds(simulationTime + 1.0));
-      }
+  InternetStackHelper stack;
+  stack.Install (wifiApNode);
+  stack.Install (wifiStaNodes);
 
-      Ipv4GlobalRoutingHelper::PopulateRoutingTables ();
+  Ipv4AddressHelper address;
+  address.SetBase ("192.168.0.0", "255.255.255.0");
+  address.Assign (staDevices);
+  Ipv4InterfaceContainer apInterfaces;
+  apInterfaces = address.Assign (apDevices);
 
-      if (tracing == true)
-      {
-        phy.EnablePcap ("covertWifi", staDevices);
-      }
+  uint16_t serverPort = 9;
+  UdpServerHelper udpServer (serverPort);
+  ApplicationContainer serverApp = udpServer.Install (wifiApNode.Get(0));
+  serverApp.Start (Seconds (1.0));
+  serverApp.Stop (Seconds (simulationTime + 1));
 
-     FlowMonitorHelper flowmon;
-     Ptr<FlowMonitor> monitor = flowmon.InstallAll ();
+  UdpClientHelper udpClient (apInterfaces.GetAddress(0), serverPort);
+  udpClient.SetAttribute ("MaxPackets", UintegerValue (nPackets));
+  udpClient.SetAttribute ("Interval", TimeValue (Seconds (timeInterval)));
+  udpClient.SetAttribute ("PacketSize", UintegerValue (packetSize));
+  ApplicationContainer clientApps = udpClient.Install (wifiStaNodes.Get(0));
+  clientApps.Start (Seconds (2.0));
+  clientApps.Stop (Seconds (simulationTime + 1));
 
-     Simulator::Stop (Seconds (simulationTime + 1));
+  Ipv4GlobalRoutingHelper::PopulateRoutingTables ();
+  PopulateARPcache();
 
-     GlobalValue::Bind ("ChecksumEnabled", BooleanValue (true));
-     Simulator::Run ();
+  Simulator::Stop (Seconds (simulationTime + 1));
 
-     monitor->CheckForLostPackets ();
-     Ptr<Ipv4FlowClassifier> classifier = DynamicCast<Ipv4FlowClassifier> (flowmon.GetClassifier ());
-     FlowMonitor::FlowStatsContainer stats = monitor->GetFlowStats ();
-
-     double total_throughput = 0;
-     for (map<FlowId, FlowMonitor::FlowStats>::const_iterator i = stats.begin (); i != stats.end (); ++i)
+  if (tracing)
     {
-
-          if (i->first > 0)
-          {
-            Ipv4FlowClassifier::FiveTuple t = classifier->FindFlow (i->first);
-            cout <<"\n";
-            cout << " Flow " << i->first <<" From (Station)"<< " with IP : " << t.sourceAddress << " To (AP) with address : " << t.destinationAddress <<"\n";
-            if(showDetails)
-            {
-            cout << "  Tx Packets: " << i->second.txPackets << "\n";
-            cout << "  Tx Bytes:   " << i->second.txBytes << "\n";
-            cout << "  TxOffered:  " << i->second.txBytes * 8.0 / simulationTime / 1000 / 1000  << " Mbps\n";
-            cout << "  Rx Packets: " << i->second.rxPackets << "\n";
-            cout << "  Rx Bytes:   " << i->second.rxBytes << "\n";
-           }
-           total_throughput = total_throughput + i->second.rxBytes * 8.0 / simulationTime / 1000 / 1000;
-       }
+      phy.SetPcapDataLinkType (WifiPhyHelper::DLT_IEEE802_11_RADIO);
+      phy.EnablePcap ("wifi-sta", staDevices.Get (0));
     }
-     cout << "Offered = "<< offeredLoad <<endl;
-     cout << "Throughput = " << total_throughput <<endl;
 
-   Simulator::Destroy ();
-   return 0;
+  Simulator::Run ();
+  Simulator::Destroy ();
+  return 0;
+}
+
+void PopulateARPcache () 
+{
+	Ptr<ArpCache> arp = CreateObject<ArpCache> ();
+	arp->SetAliveTimeout (Seconds (3600 * 24 * 365) );
+
+	for (NodeList::Iterator i = NodeList::Begin (); i != NodeList::End (); ++i)
+	{
+		Ptr<Ipv4L3Protocol> ip = (*i)->GetObject<Ipv4L3Protocol> ();
+		NS_ASSERT (ip !=0);
+		ObjectVectorValue interfaces;
+		ip->GetAttribute ("InterfaceList", interfaces);
+
+		for (ObjectVectorValue::Iterator j = interfaces.Begin (); j != interfaces.End (); j++)
+		{
+			Ptr<Ipv4Interface> ipIface = (*j).second->GetObject<Ipv4Interface> ();
+			NS_ASSERT (ipIface != 0);
+			Ptr<NetDevice> device = ipIface->GetDevice ();
+			NS_ASSERT (device != 0);
+			Mac48Address addr = Mac48Address::ConvertFrom (device->GetAddress () );
+
+			for (uint32_t k = 0; k < ipIface->GetNAddresses (); k++)
+			{
+				Ipv4Address ipAddr = ipIface->GetAddress (k).GetLocal();
+				if (ipAddr == Ipv4Address::GetLoopback ())
+					continue;
+
+				ArpCache::Entry *entry = arp->Add (ipAddr);
+				Ipv4Header ipv4Hdr;
+				ipv4Hdr.SetDestination (ipAddr);
+				Ptr<Packet> p = Create<Packet> (100);
+				entry->MarkWaitReply (ArpCache::Ipv4PayloadHeaderPair (p, ipv4Hdr));
+				entry->MarkAlive (addr);
+			}
+		}
+	}
+
+	for (NodeList::Iterator i = NodeList::Begin (); i != NodeList::End (); ++i)
+	{
+		Ptr<Ipv4L3Protocol> ip = (*i)->GetObject<Ipv4L3Protocol> ();
+		NS_ASSERT (ip !=0);
+		ObjectVectorValue interfaces;
+		ip->GetAttribute ("InterfaceList", interfaces);
+
+		for (ObjectVectorValue::Iterator j = interfaces.Begin (); j != interfaces.End (); j ++)
+		{
+			Ptr<Ipv4Interface> ipIface = (*j).second->GetObject<Ipv4Interface> ();
+			ipIface->SetAttribute ("ArpCache", PointerValue (arp) );
+		}
+	}
 }
